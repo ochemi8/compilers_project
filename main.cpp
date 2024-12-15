@@ -144,7 +144,6 @@ private:
         if (peek().second == expectedType) {
             advance();
         } else {
-            showErrorMessage("user used unexpected type");
             fprintf(stderr, "user used unexpected type");
         }
     }
@@ -154,14 +153,13 @@ private:
 
         return stmt_sequence(parent);
     }
-    syntax_tree_node* stmt_sequence(syntax_tree_node* parent){
-        //cout<<"stmtseq"<<endl;
+    syntax_tree_node* stmt_sequence(syntax_tree_node* parent) {
         syntax_tree_node* stmt_seq_node = new syntax_tree_node(currentNodeID++,"stmt_seq");
-        //parent->addChild(stmt_seq_node);
+        parent->addChild(stmt_seq_node); // Add to the parent's children
 
         do {
-            syntax_tree_node* stmt_node = statement(parent);
-            parent->addChild(stmt_node);
+            syntax_tree_node* stmt_node = statement(stmt_seq_node); // Pass `stmt_seq_node` as parent
+            stmt_seq_node->addChild(stmt_node);
             if (peek().second == SEMICOLON) {
                 match(SEMICOLON);
             } else {
@@ -171,13 +169,14 @@ private:
 
         return stmt_seq_node;
     }
+
     syntax_tree_node* statement(syntax_tree_node* parent){
 
         syntax_tree_node* stmt_node = new syntax_tree_node(currentNodeID++,"statement");
-        cout<<peek().first<<endl;
+        //cout<<peek().first<<endl;
         if (peek().second == IF) {
             syntax_tree_node* node = if_stmt(stmt_node);
-            //parent->addChild(node);
+            parent->addChild(node);
         } else if (peek().second == REPEAT) {
             //cout<<"repeat"<<endl;
             syntax_tree_node* node = repeat_stmt(stmt_node);
@@ -193,31 +192,31 @@ private:
             syntax_tree_node* node = write_stmt(stmt_node);
             parent->addChild(node);
         } else {
-            showErrorMessage("Syntax Error: Invalid statement.");
             throw runtime_error("Syntax Error: Invalid statement.");
         }
         return stmt_node;
     }
-    syntax_tree_node* if_stmt(syntax_tree_node* parent)
-    {
-        syntax_tree_node* if_node = new syntax_tree_node(currentNodeID++,"if-stmt");
-        parent->addChild(if_node);
-        //cout<<"ifstmt"<<endl;
-        match(IF);
-        syntax_tree_node* exp_node=exp(if_node);
-        if_node->addChild(exp_node);
-        match(THEN);
+    syntax_tree_node* if_stmt(syntax_tree_node* parent) {
+        syntax_tree_node* if_node = new syntax_tree_node(currentNodeID++, "if-stmt");
+        //parent->addChild(if_node);
 
-        syntax_tree_node* stmt_seq_node =stmt_sequence(if_node);
-        parent->addChild(stmt_seq_node);
-        if(peek().second== ELSE)
-        {
-            syntax_tree_node* else_node = new syntax_tree_node(currentNodeID++,"else");
-            parent->addChild(else_node);
+        match(IF);
+        syntax_tree_node* exp_node = exp(if_node);
+        if_node->addChild(exp_node);
+
+        match(THEN);
+        syntax_tree_node* stmt_seq_node = stmt_sequence(if_node);
+        if_node->addChild(stmt_seq_node);
+
+        if (peek().second == ELSE) {
             match(ELSE);
-            syntax_tree_node* stmt_seq_node = stmt_sequence(else_node);
-            else_node->addChild(stmt_seq_node);
+            syntax_tree_node* else_node = new syntax_tree_node(currentNodeID++, "else");
+            if_node->addChild(else_node);
+
+            syntax_tree_node* else_stmt_seq = stmt_sequence(else_node);
+            else_node->addChild(else_stmt_seq);
         }
+
         match(END);
         return if_node;
     }
@@ -265,31 +264,37 @@ private:
         return read_stmt;
     }
 
-    syntax_tree_node* write_stmt(syntax_tree_node* parent)
-    {
-        syntax_tree_node* write_node = new syntax_tree_node(currentNodeID++,"write");
-        //parent->addChild(write_node);
-        //cout<<"write"<<endl;
+    syntax_tree_node* write_stmt(syntax_tree_node* parent) {
+        syntax_tree_node* write_node = new syntax_tree_node(currentNodeID++, "write");
+        parent->addChild(write_node);
+
         match(WRITE);
         syntax_tree_node* exp_node = exp(write_node);
+        write_node->addChild(exp_node);
+
         return write_node;
     }
 
-    syntax_tree_node* exp(syntax_tree_node* parent)
-    {
-        //syntax_tree_node* exp_node=new syntax_tree_node(currentNodeID++,tokens.at(current+1).first);
-        //cout<<"exp"<<endl;
-        //cout<<parent->label<<endl;
-        //parent->addChild(exp_node);
-        syntax_tree_node* simple_exp_node =simple_exp(parent);
-        parent->addChild(simple_exp_node);
-        if(peek().second == LESSTHAN | peek().second == EQUAL){
+
+    syntax_tree_node* exp(syntax_tree_node* parent) {
+        syntax_tree_node* exp_node = new syntax_tree_node(currentNodeID++, "exp");
+        parent->addChild(exp_node);
+
+        syntax_tree_node* simple_exp_node = simple_exp(exp_node);
+        exp_node->addChild(simple_exp_node);
+
+        if (peek().second == LESSTHAN || peek().second == EQUAL) {
+            syntax_tree_node* op_node = new syntax_tree_node(currentNodeID++, peek().first);
+            exp_node->addChild(op_node);
+
             match(peek().second);
-            syntax_tree_node* simple_exp2= simple_exp(parent);
-            parent->addChild(simple_exp2);
+            syntax_tree_node* simple_exp2 = simple_exp(exp_node);
+            exp_node->addChild(simple_exp2);
         }
-        return parent;
+
+        return exp_node;
     }
+
 
     syntax_tree_node* simple_exp(syntax_tree_node* parent)
     {
@@ -319,49 +324,49 @@ private:
             //syntax_tree_node* fac_node =factor(parent);
             //parent->addChild(fac_node);
             //cout<<peek().first<<endl;
-            factor(parent);
+            syntax_tree_node* t1= factor(parent);
 
             if(peek().second == MULT | peek().second == DIV){
                 op_node=new syntax_tree_node(currentNodeID++,peek().first);
                 parent->addChild(op_node);
-                op_node->addChild(op_node);
+                op_node->addChild(t1);
                 match(peek().second);
                 //syntax_tree_node* fac_node2 = factor(parent);
-                factor(parent);
 
+                syntax_tree_node* t2 = factor(parent);
+                //cout<<peek().first;
             }
 
         }while(peek().second == MULT | peek().second == DIV);
         return op_node;
     }
 
-    void factor(syntax_tree_node* parent)
+    syntax_tree_node* factor(syntax_tree_node* parent)
     {
         //cout<<"factor\n";
         if(peek().second == OPENBRACKET){
             match(OPENBRACKET);
-            exp(parent);
+            syntax_tree_node* expnode =exp(parent);
             //syntax_tree_node* node =exp(parent);
             match(CLOSEBRACKET);
-            //return node;
+            return expnode;
         }
         else if(peek().second == NUMBER){
-            // syntax_tree_node* node = new syntax_tree_node(currentNodeID++,"number");
-            // parent->addChild(node);
+            syntax_tree_node* node = new syntax_tree_node(currentNodeID++,"number");
+            parent->addChild(node);
             match(peek().second);
             //return node;
         }
         else if(peek().second == IDENTIFIER) {
-            // syntax_tree_node* node = new syntax_tree_node(currentNodeID++,"id");
-            //parent->addChild(node);
-            cout<<peek().first<<endl;
+            syntax_tree_node* node = new syntax_tree_node(currentNodeID++,"id");
+            parent->addChild(node);
+            //cout<<peek().first<<endl;
             match(peek().second);
+
             // return node;
         }
-        else{
-            showErrorMessage("Syntax Error: Invalid statement.");
-            throw runtime_error("Syntax Error: Invalid statement.");}
-
+        else throw runtime_error("Syntax Error: Invalid statement.");
+        return parent;
 
     }
 public:
@@ -369,9 +374,11 @@ public:
     Parser(const vector<pair<string, TokenType>>& tokens)
         : tokens(tokens), current(0), root(nullptr), currentNodeID(0) {}
     syntax_tree_node* parse() {
-        syntax_tree_node* root = program(root);
+        root = new syntax_tree_node(currentNodeID++, "program"); // Initialize root node
+        program(root); // Populate the syntax tree
         return root;
     }
+
 
 
 };
@@ -473,7 +480,6 @@ int main(int argc, char* argv[]) {
 
         //printTree(root);
         //renderGraph(scene, root, 400, 50, 200, 100);
-        delete root;
     });
     // Set the main window properties
 
