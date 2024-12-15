@@ -473,6 +473,7 @@ int main(int argc, char* argv[]) {
 
         //printTree(root);
         //renderGraph(scene, root, 400, 50, 200, 100);
+        delete root;
     });
     // Set the main window properties
 
